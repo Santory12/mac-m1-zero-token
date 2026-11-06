@@ -34,14 +34,24 @@ cp src/localsearch.py "$TARGET_DIR/localsearch"
 chmod +x "$TARGET_DIR/localsearch"
 echo "✓ Утилита localsearch установлена в $TARGET_DIR/localsearch"
 
-# 5. Проверка $PATH в ~/.zshrc
+# 5. Установка утилит валидации артефактов (Модуль 5: wbsvalid, wbs2xlsx, checkodoo)
+echo " Установка утилит валидации артефактов..."
+cp src/validate_wbs.py "$TARGET_DIR/wbsvalid"
+chmod +x "$TARGET_DIR/wbsvalid"
+cp src/generate_wbs_xlsx.py "$TARGET_DIR/wbs2xlsx"
+chmod +x "$TARGET_DIR/wbs2xlsx"
+cp src/checkodoo.py "$TARGET_DIR/checkodoo"
+chmod +x "$TARGET_DIR/checkodoo"
+echo "✓ Утилиты wbsvalid, wbs2xlsx, checkodoo установлены в $TARGET_DIR"
+
+# 6. Проверка $PATH в ~/.zshrc
 if [[ ":$PATH:" != *":$TARGET_DIR:"* ]]; then
     echo " Добавление $TARGET_DIR в PATH (~/.zshrc)..."
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
     echo "✓ Добавлено в ~/.zshrc"
 fi
 
-# 6. Проверка зависимостей
+# 7. Проверка зависимостей
 echo " Проверка зависимостей..."
 if command -v rg >/dev/null 2>&1; then
     echo "✓ ripgrep (rg) найден"
@@ -69,10 +79,13 @@ else
 fi
 
 echo ""
-echo "=== Установка завершена успешно! ==="
+echo "=== Установка завершена успешно! Все 5 модулей развернуты! ==="
 echo "Доступные команды:"
 echo "  1. ocr                       -> Распознать скриншот прямо из буфера обмена"
 echo "  2. ocr <файл>                -> Распознать картинку или PDF"
 echo "  3. cleandoc <файл_тз>        -> Очистить ТЗ/RFP от воды и сохранить до 85% токенов"
 echo "  4. localai \"вопрос/задача\"   -> Задать вопрос локальной модели без интернета (0 токенов)"
 echo "  5. localsearch \"запрос\"      -> Сверхбыстрый поиск по пресейлам и памяти (0 токенов)"
+echo "  6. wbsvalid <файл.csv>       -> Строгая валидация WBS Gold Standard"
+echo "  7. wbs2xlsx <файл.csv>       -> Генерация форматированного 2-вкладочного Excel"
+echo "  8. checkodoo <файл.xml|py>   -> Проверка синтаксиса и правил Odoo 18/19"
