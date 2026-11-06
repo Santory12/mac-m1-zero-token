@@ -28,20 +28,30 @@ cp src/localai.py "$TARGET_DIR/localai"
 chmod +x "$TARGET_DIR/localai"
 echo "✓ Утилита localai установлена в $TARGET_DIR/localai"
 
-# 4. Проверка $PATH в ~/.zshrc
+# 4. Установка утилиты localsearch (Сверхбыстрый поиск по базе знаний через ripgrep)
+echo " Установка утилиты localsearch..."
+cp src/localsearch.py "$TARGET_DIR/localsearch"
+chmod +x "$TARGET_DIR/localsearch"
+echo "✓ Утилита localsearch установлена в $TARGET_DIR/localsearch"
+
+# 5. Проверка $PATH в ~/.zshrc
 if [[ ":$PATH:" != *":$TARGET_DIR:"* ]]; then
     echo " Добавление $TARGET_DIR в PATH (~/.zshrc)..."
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
     echo "✓ Добавлено в ~/.zshrc"
 fi
 
-# 5. Проверка Ollama и локальной модели qwen2.5:3b
-echo " Проверка локального движка Ollama..."
+# 6. Проверка зависимостей
+echo " Проверка зависимостей..."
+if command -v rg >/dev/null 2>&1; then
+    echo "✓ ripgrep (rg) найден"
+else
+    echo "⚠ ripgrep не найден. Рекомендуется установить: brew install ripgrep"
+fi
+
 if command -v ollama >/dev/null 2>&1; then
     echo "✓ ollama установлен"
-    # Запуск сервиса если не запущен
     brew services start ollama 2>/dev/null || true
-    # Проверяем наличие модели qwen2.5:3b
     if ! ollama list | grep -q "qwen2.5:3b"; then
         echo " Загрузка легковесной модели qwen2.5:3b (1.9 GB)..."
         ollama pull qwen2.5:3b
@@ -52,7 +62,6 @@ else
     echo "⚠ ollama не найден. Рекомендуется установить: brew install ollama"
 fi
 
-# 6. Проверка Pandoc
 if command -v pandoc >/dev/null 2>&1; then
     echo "✓ pandoc найден (поддержка DOCX активирована)"
 else
@@ -66,3 +75,4 @@ echo "  1. ocr                       -> Распознать скриншот п
 echo "  2. ocr <файл>                -> Распознать картинку или PDF"
 echo "  3. cleandoc <файл_тз>        -> Очистить ТЗ/RFP от воды и сохранить до 85% токенов"
 echo "  4. localai \"вопрос/задача\"   -> Задать вопрос локальной модели без интернета (0 токенов)"
+echo "  5. localsearch \"запрос\"      -> Сверхбыстрый поиск по пресейлам и памяти (0 токенов)"
