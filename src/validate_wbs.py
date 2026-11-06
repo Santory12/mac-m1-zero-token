@@ -7,6 +7,7 @@ Ensures strict syntactic, structural, and mathematical compliance.
 import sys
 import csv
 import re
+from decimal import Decimal, InvalidOperation
 
 EXPECTED_HEADERS = [
     "Business Requirement",
@@ -39,7 +40,7 @@ def validate_wbs(filepath):
     print(f"🔍 Validating WBS Gold Standard: {filepath}")
     
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, 'r', encoding='utf-8-sig') as f:
             sample = f.read(4096)
             if ';' not in sample:
                 errors.append("Delimiter error: CSV must use semicolon ';' as delimiter.")
@@ -48,7 +49,7 @@ def validate_wbs(filepath):
         return False
 
     rows = []
-    with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
+    with open(filepath, 'r', encoding='utf-8-sig', errors='replace') as f:
         reader = csv.reader(f, delimiter=';')
         try:
             for line_no, row in enumerate(reader, start=1):
@@ -104,15 +105,24 @@ def validate_wbs(filepath):
             except ValueError:
                 pass
 
-        # Track numeric totals for line items (excluding summary rows)
-        if not any(kw in req.upper() for kw in ["TOTAL", "SUBTOTAL"]):
+        values = []
+        for label, value in zip(EXPECTED_HEADERS[7:], [dev_min, dev_max, cons_min, cons_max]):
             try:
-                if dev_min.isdigit(): dev_min_total += int(dev_min)
-                if dev_max.isdigit(): dev_max_total += int(dev_max)
-                if cons_min.isdigit(): cons_min_total += int(cons_min)
-                if cons_max.isdigit(): cons_max_total += int(cons_max)
-            except ValueError:
-                pass
+                number = Decimal(value) if value else Decimal(0)
+                if not number.is_finite() or number < 0:
+                    raise InvalidOperation
+                values.append(number)
+            except InvalidOperation:
+                errors.append(f"Line {line_no}: invalid {label}: {value!r}")
+                values.append(None)
+        if all(v is not None for v in values):
+            if values[0] > values[1] or values[2] > values[3]:
+                errors.append(f"Line {line_no}: minimum exceeds maximum")
+            if not any(kw in req.upper() for kw in ["TOTAL", "SUBTOTAL"]):
+                dev_min_total += values[0]
+                dev_max_total += values[1]
+                cons_min_total += values[2]
+                cons_max_total += values[3]
 
     # Check mandatory sections
     for sec in MANDATORY_SECTIONS:
@@ -127,7 +137,7 @@ def validate_wbs(filepath):
     print(f"   Dev: {dev_min_total} - {dev_max_total} hrs")
     print(f"   Consultant: {cons_min_total} - {cons_max_total} hrs")
     print(f"   Grand Total (pre-buffer): {dev_min_total + cons_min_total} - {dev_max_total + cons_max_total} hrs")
-    print(f"   Recommended 15% PM Buffer: {round((dev_min_total + cons_min_total)*0.15)} - {round((dev_max_total + cons_max_total)*0.15)} hrs")
+    print(f"   Recommended 15% PM Buffer: {round((dev_min_total + cons_min_total)*Decimal("0.15"))} - {round((dev_max_total + cons_max_total)*Decimal("0.15"))} hrs")
 
     return report(errors, warnings)
 

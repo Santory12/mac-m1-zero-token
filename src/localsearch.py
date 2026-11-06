@@ -63,10 +63,14 @@ def main():
         if os.path.exists(mem_dir) and mem_dir not in search_dirs:
             search_dirs.append(mem_dir)
 
+    if not search_dirs:
+        print("Нет доступных каталогов", file=sys.stderr)
+        sys.exit(2)
+
     print(f"🔍 Поиск «{query}» в: {', '.join(search_dirs)}...")
 
     cmd = [
-        "rg", "-i", "-C", "2", "-M", "300",
+        "rg", "-F", "-i", "-C", "2", "-M", "300",
         "--heading", "--line-number",
         "-g", "!*.git*",
         "-g", "!*.pyc",
@@ -75,11 +79,14 @@ def main():
         "-g", "!*.dsf",
         "-g", "!*.flac",
         "-g", "!*.mp3",
-        query
+        "--", query
     ] + search_dirs
 
     try:
         res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode not in (0, 1):
+            print(res.stderr.strip(), file=sys.stderr)
+            sys.exit(2)
         output = res.stdout.strip()
         if not output:
             print(f" Совпадений по запросу «{query}» не найдено.")

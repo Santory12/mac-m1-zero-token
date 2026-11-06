@@ -7,6 +7,7 @@ Complies with Section 11 of Documents/GEMINI CLI Sandbox/Presale/GEMINI.md.
 import sys
 import os
 import csv
+from decimal import Decimal, InvalidOperation
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -20,6 +21,18 @@ def read_csv_rows(filepath):
             if any(cell.strip() for cell in r):
                 rows.append([cell.strip() for cell in r])
     return rows
+
+def numeric_value(value):
+    if not value:
+        return value
+    try:
+        number = Decimal(value)
+        if not number.is_finite() or number < 0:
+            raise ValueError(f"Invalid hours: {value!r}")
+        return int(number) if number == number.to_integral_value() else float(number)
+    except InvalidOperation:
+        raise ValueError(f"Invalid hours: {value!r}")
+
 
 def style_sheet(ws, rows, is_ru=False):
     # Palette
@@ -46,9 +59,13 @@ def style_sheet(ws, rows, is_ru=False):
     ALIGN_HEADER = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     for row_idx, r in enumerate(rows, start=1):
+        if len(r) != 11:
+            raise ValueError(f"Row {row_idx}: expected 11 columns, got {len(r)}")
         # Pad row to 11 columns
         padded_row = r + [""] * (11 - len(r))
         ws.append(padded_row)
+        for column, value in enumerate(padded_row, 1):
+            ws.cell(row_idx, column).data_type = "s"
         
         is_header = (row_idx == 1)
         first_cell_upper = padded_row[0].upper()
@@ -76,15 +93,14 @@ def style_sheet(ws, rows, is_ru=False):
                 cell.font = TOTAL_FONT
                 cell.alignment = ALIGN_CENTER if col_idx >= 8 else ALIGN_TEXT
                 # Try convert numeric
-                if col_idx >= 8 and cell.value and cell.value.isdigit():
-                    cell.value = int(cell.value)
+                if col_idx >= 8:
+                    cell.value = numeric_value(cell.value)
             else:
                 cell.font = REGULAR_FONT
                 # Cols 8,9,10,11 are numeric estimates
                 if col_idx in [8, 9, 10, 11]:
                     cell.alignment = ALIGN_CENTER
-                    if cell.value and cell.value.isdigit():
-                        cell.value = int(cell.value)
+                    cell.value = numeric_value(cell.value)
                 else:
                     cell.alignment = ALIGN_TEXT
 
@@ -125,6 +141,15 @@ def build_wbs_xlsx(en_csv_path, ru_csv_path, out_xlsx_path):
     en_rows = read_csv_rows(en_csv_path)
     ru_rows = read_csv_rows(ru_csv_path)
 
+    if not en_rows or not ru_rows:
+        raise ValueError("Both CSV files must contain a header")
+    for rows in (en_rows, ru_rows):
+        for row in rows[1:]:
+            if len(row) != 11:
+                raise ValueError("Expected 11 columns")
+            vals = [numeric_value(v) or 0 for v in row[7:11]]
+            if vals[0] > vals[1] or vals[2] > vals[3]:
+                raise ValueError("Minimum exceeds maximum")
     wb = openpyxl.Workbook()
     # Sheet 1: English
     ws_en = wb.active

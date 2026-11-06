@@ -12,6 +12,11 @@ import Vision
 import AppKit
 import PDFKit
 
+func fail(_ message: String) -> Never {
+    fputs("Ошибка: \(message)\n", stderr)
+    exit(1)
+}
+
 func recognizeImage(cgImage: CGImage) -> String {
     var resultText = ""
     let request = VNRecognizeTextRequest { (req, err) in
@@ -27,7 +32,8 @@ func recognizeImage(cgImage: CGImage) -> String {
     request.usesLanguageCorrection = true
 
     let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-    try? handler.perform([request])
+    do { try handler.perform([request]) }
+    catch { fail("OCR: \(error)") }
     return resultText
 }
 
@@ -47,13 +53,14 @@ func getImageFromClipboard() -> NSImage? {
 
 func processPDF(url: URL) -> String {
     guard let doc = PDFDocument(url: url) else {
-        return "Ошибка: Не удалось открыть PDF файл."
+        fail("Не удалось открыть PDF файл.")
     }
+    if doc.isLocked { fail("PDF защищен паролем") }
     var fullText = ""
     for i in 0..<doc.pageCount {
-        guard let page = doc.page(at: i) else { continue }
+        guard let page = doc.page(at: i) else { fail("Не удалось прочитать страницу \(i + 1)") }
         let pageStr = page.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if pageStr.count > 30 {
+        if !pageStr.isEmpty && !CommandLine.arguments.contains("--force-ocr") {
             fullText += "--- Страница \(i + 1) ---\n" + pageStr + "\n\n"
         } else {
             let pageRect = page.bounds(for: .mediaBox)
@@ -67,8 +74,11 @@ func processPDF(url: URL) -> String {
             renderer.unlockFocus()
             if let cgImage = renderer.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                 let ocrText = recognizeImage(cgImage: cgImage)
+                if ocrText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    fail("Страница \(i + 1): текст не распознан; полнота не подтверждена")
+                }
                 fullText += "--- Страница \(i + 1) (OCR) ---\n" + ocrText + "\n\n"
-            }
+            } else { fail("Не удалось отрисовать страницу \(i + 1)") }
         }
     }
     return fullText
@@ -89,13 +99,14 @@ func processDocx(path: String) -> String {
     task.arguments = ["-f", "docx", "-t", "markdown", path]
     let pipe = Pipe()
     task.standardOutput = pipe
-    try? task.run()
-    task.waitUntilExit()
+    do { try task.run() } catch { fail("Запуск pandoc: \(error)") }
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    task.waitUntilExit()
+    if task.terminationStatus != 0 { fail("pandoc завершился с ошибкой") }
     return String(data: data, encoding: .utf8) ?? ""
 }
 
-let args = CommandLine.arguments
+let args = CommandLine.arguments.filter { $0 != "--force-ocr" }
 
 if args.count == 1 {
     if let img = getImageFromClipboard(),
@@ -156,13 +167,12 @@ if ext == "pdf" {
 recognizedText = recognizedText.trimmingCharacters(in: .whitespacesAndNewlines)
 
 if recognizedText.isEmpty {
-    print("Текст не обнаружен.")
+    fail("Текст не обнаружен.")
 } else {
-    print(recognizedText)
-    copyToClipboard(recognizedText)
-    
     let outExt = (ext == "docx") ? "md" : "txt"
     let outURL = fileURL.deletingPathExtension().appendingPathExtension(outExt)
-    try? recognizedText.write(to: outURL, atomically: true, encoding: .utf8)
-    fputs("\n[✓ Успешно распознано/сконвертировано -> \(outURL.path), скопировано в буфер]\n", stderr)
+    do { try recognizedText.write(to: outURL, atomically: true, encoding: .utf8) }
+    catch { fail("Не удалось сохранить результат: \(error)") }
+    print(recognizedText)
+    fputs("[✓ Сохранено: \(outURL.path)]\n", stderr)
 }

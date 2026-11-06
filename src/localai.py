@@ -30,15 +30,21 @@ def stream_generate(prompt: str, system_prompt: str = "", model: str = DEFAULT_M
     req = urllib.request.Request(OLLAMA_API_URL, data=data, headers={"Content-Type": "application/json"})
 
     try:
-        with urllib.request.urlopen(req) as resp:
+        completed = False
+        with urllib.request.urlopen(req, timeout=120) as resp:
             for line in resp:
                 if line:
                     chunk = json.loads(line.decode("utf-8"))
+                    if chunk.get("error"):
+                        raise RuntimeError(chunk["error"])
+                    completed = completed or chunk.get("done", False)
                     text = chunk.get("response", "")
                     sys.stdout.write(text)
                     sys.stdout.flush()
+            if not completed:
+                raise RuntimeError("Незавершенный ответ Ollama")
             print() # перевод строки в конце
-    except urllib.error.URLError as e:
+    except (urllib.error.URLError, TimeoutError, RuntimeError, ValueError) as e:
         print(f"\n[Ошибка] Не удалось связаться с локальным сервисом Ollama: {e}")
         print("Убедитесь, что сервис запущен: brew services start ollama или ollama serve")
         sys.exit(1)
@@ -63,8 +69,9 @@ def main():
     instruction = ""
 
     # Проверяем stdin (если текст передан через pipe: cat ... | localai ...)
-    if not sys.stdin.isatty():
-        file_context = sys.stdin.read().strip()
+    piped_content = sys.stdin.read().strip() if not sys.stdin.isatty() else ""
+    if piped_content:
+        file_context = piped_content
         if len(sys.argv) > 1:
             instruction = " ".join(sys.argv[1:])
         else:
@@ -74,7 +81,7 @@ def main():
         # Один аргумент: либо путь к файлу, либо вопрос
         arg = sys.argv[1]
         if os.path.exists(arg):
-            with open(arg, "r", encoding="utf-8", errors="ignore") as f:
+            with open(arg, "r", encoding="utf-8", errors="strict") as f:
                 file_context = f.read().strip()
             instruction = "Сделай краткую структурированную выжимку и выдели суть:"
         else:
@@ -84,7 +91,7 @@ def main():
         # Два аргумента: файл и инструкция
         first_arg = sys.argv[1]
         if os.path.exists(first_arg):
-            with open(first_arg, "r", encoding="utf-8", errors="ignore") as f:
+            with open(first_arg, "r", encoding="utf-8", errors="strict") as f:
                 file_context = f.read().strip()
             instruction = " ".join(sys.argv[2:])
         else:

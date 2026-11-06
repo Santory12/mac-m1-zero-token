@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
+cd "$(dirname "$0")"
 
 # ==============================================================================
 # mac-m1-zero-token: Установщик локальных инструментов для macOS Apple Silicon
@@ -9,6 +10,19 @@ echo "=== Установка mac-m1-zero-token ==="
 
 TARGET_DIR="$HOME/.local/bin"
 mkdir -p "$TARGET_DIR"
+
+# Use a Python environment with the required Excel dependency.
+PYTHON_BIN=""
+for candidate in python3 python3.14; do
+    if command -v "$candidate" >/dev/null && "$candidate" -c 'import openpyxl' 2>/dev/null; then
+        PYTHON_BIN=$(command -v "$candidate")
+        break
+    fi
+done
+if [ -z "$PYTHON_BIN" ]; then
+    echo "Requires Python with openpyxl. Install it in a virtual environment and put that environment on PATH." >&2
+    exit 1
+fi
 
 # 1. Компиляция нативной утилиты ocr (Swift + Apple Vision + PDFKit)
 echo " Компиляция утилиты ocr под Apple Silicon..."
@@ -44,6 +58,25 @@ cp src/checkodoo.py "$TARGET_DIR/checkodoo"
 chmod +x "$TARGET_DIR/checkodoo"
 echo "✓ Утилиты wbsvalid, wbs2xlsx, checkodoo установлены в $TARGET_DIR"
 
+# 6. Установка продвинутых утилит (Модуль 6 и 7: docmap, localdoctor)
+echo " Установка утилит docmap и localdoctor..."
+cp src/docmap.py "$TARGET_DIR/docmap"
+chmod +x "$TARGET_DIR/docmap"
+cp src/localdoctor.sh "$TARGET_DIR/localdoctor"
+chmod +x "$TARGET_DIR/localdoctor"
+echo "✓ Утилиты docmap и localdoctor установлены в $TARGET_DIR"
+
+# Pin Python tools to the interpreter whose dependencies were checked.
+for tool in cleandoc localai localsearch wbsvalid wbs2xlsx checkodoo docmap; do
+    "$PYTHON_BIN" - "$TARGET_DIR/$tool" "$PYTHON_BIN" <<'PYTHON'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+p.write_text("#!" + sys.argv[2] + "\n" + p.read_text().split("\n", 1)[1])
+PYTHON
+done
+cp src/transcribe_local.sh "$TARGET_DIR/transcribe_local"
+chmod +x "$TARGET_DIR/transcribe_local"
+
 # 6. Проверка $PATH в ~/.zshrc
 if [[ ":$PATH:" != *":$TARGET_DIR:"* ]]; then
     echo " Добавление $TARGET_DIR в PATH (~/.zshrc)..."
@@ -61,13 +94,7 @@ fi
 
 if command -v ollama >/dev/null 2>&1; then
     echo "✓ ollama установлен"
-    brew services start ollama 2>/dev/null || true
-    if ! ollama list | grep -q "qwen2.5:3b"; then
-        echo " Загрузка легковесной модели qwen2.5:3b (1.9 GB)..."
-        ollama pull qwen2.5:3b
-    else
-        echo "✓ Модель qwen2.5:3b уже загружена"
-    fi
+    echo "Модели и запуск Ollama настраиваются отдельно; установщик их не загружает."
 else
     echo "⚠ ollama не найден. Рекомендуется установить: brew install ollama"
 fi
@@ -87,5 +114,7 @@ echo "  3. cleandoc <файл_тз>        -> Очистить ТЗ/RFP от в�
 echo "  4. localai \"вопрос/задача\"   -> Задать вопрос локальной модели без интернета (0 токенов)"
 echo "  5. localsearch \"запрос\"      -> Сверхбыстрый поиск по пресейлам и памяти (0 токенов)"
 echo "  6. wbsvalid <файл.csv>       -> Строгая валидация WBS Gold Standard"
-echo "  7. wbs2xlsx <файл.csv>       -> Генерация форматированного 2-вкладочного Excel"
+echo "  7. wbs2xlsx <en.csv> <ru.csv> <output.xlsx>       -> Генерация форматированного 2-вкладочного Excel"
 echo "  8. checkodoo <файл.xml|py>   -> Проверка синтаксиса и правил Odoo 18/19"
+echo "  9. docmap <файл.md>          -> Генерация карты документа (номера строк, H1-H6, токены)"
+echo " 10. localdoctor               -> Диагностика зависимостей и целостности модулей экосистемы"

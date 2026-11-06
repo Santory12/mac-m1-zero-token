@@ -31,31 +31,9 @@ def check_xml(file_path):
         print_results(errors, warnings)
         return False
 
-    # 2. Проверка устаревшего тега <tree> (В Odoo 18/19 обязателен <list>)
-    if "<tree" in content or "</tree>" in content:
-        # Проверяем, не является ли это строкой комментария
-        tree_matches = re.findall(r"<tree[\s>]", content)
-        if tree_matches:
-            errors.append("Использован устаревший тег <tree>. В Odoo 18 и 19 тег полностью заменен на <list>!")
-
-    # 3. Проверка лишней обертки <data> внутри <odoo>
-    if "<data>" in content and "<odoo>" in content:
-        errors.append("Обнаружен тег <data> внутри <odoo>. В современных версиях Odoo записи <record> размещаются прямо внутри <odoo>.")
-
-    # 4. Проверка правильности структуры <record>
-    records = re.findall(r"<record\s+([^>]+)>(.*?)</record>", content, re.DOTALL)
-    for attrs, body in records:
-        # Ищем недопустимые вложенные теги <name>, <model>, <inherit_id> вне <field>
-        invalid_tags = ["name", "model", "inherit_id", "arch"]
-        for tag in invalid_tags:
-            if re.search(rf"<{tag}>", body):
-                errors.append(f"Недопустимый тег <{tag}> внутри <record>. Атрибуты должны задаваться исключительно через <field name='{tag}'>.")
-
-    # 5. Проверка динамических декораций (decoration-*) внутри <form>
-    forms = re.findall(r"<form[\s>](.*?)</form>", content, re.DOTALL)
-    for form_body in forms:
-        if re.search(r"decoration-\w+=", form_body):
-            errors.append("Использован атрибут decoration-* внутри формы <form>. Декораторы строк допустимы только в списках <list>!")
+    # Parse actual elements: comments and string literals are not XML nodes.
+    if any(node.tag == "tree" for node in root.iter()):
+        warnings.append("Found <tree>: review compatibility with the target Odoo version.")
 
     return print_results(errors, warnings)
 

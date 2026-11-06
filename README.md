@@ -14,7 +14,7 @@
 
 ---
 
-## 📊 Дорожная карта внедрения (Прогресс: 5 из 5 — 100% ГОТОВО!)
+## 📊 Дорожная карта внедрения (Прогресс: 7 из 7 — 100% ГОТОВО!)
 
 | № | Направление | Инструмент | Статус | Экономия токенов |
 |---|---|---|:---:|:---:|
@@ -23,6 +23,8 @@
 | **3** | **Малые локальные нейросети (SLM)** | `localai` (Qwen 2.5 3B / Ollama на Apple Metal M1) | ✅ **ГОТОВО** | 100% на черновую обработку |
 | **4** | **Локальный поиск и индексация** | `localsearch` (ripgrep по базе знаний и пресейлам) | ✅ **ГОТОВО** | ~95% токенов на контекстный поиск |
 | **5** | **Локальная валидация артефактов** | `wbsvalid`, `wbs2xlsx`, `checkodoo` (Odoo 18/19 Linter) | ✅ **ГОТОВО** | Предотвращает ошибки и циклы правок |
+| **6** | **Карта документа** | `docmap` (Генератор структуры Markdown со строками) | ✅ **ГОТОВО** | Точечное извлечение нужных строк |
+| **7** | **Локальная диагностика** | `localdoctor` (Проверка зависимостей и экосистемы) | ✅ **ГОТОВО** | Стабильность среды |
 
 ---
 
@@ -77,6 +79,14 @@ cd mac-m1-zero-token
 * **`wbs2xlsx <файл.csv>`:** Автоматическая генерация форматированного клиентского 2-вкладочного Excel.
 * **`checkodoo <файл.xml|py>`:** Локальный линтер Odoo 18/19 (проверка запрета `<tree>`, лишних `<data>`, правильности записей и синтаксиса Python).
 
+### 6. `docmap` — Карта документа
+* **Назначение:** Генерирует оглавление Markdown-файла с точными номерами строк (начало и конец раздела) и оценкой токенов.
+* **Использование:** `docmap document_full.md` -> Выдает ИИ-агенту карту, чтобы он извлекал только нужный кусок (`start_line=10`, `end_line=50`).
+
+### 7. `localdoctor` — Диагностика экосистемы
+* **Назначение:** Единая команда для проверки целостности всех утилит, зависимостей ($PATH, pandoc, swiftc, ripgrep) и наличия локальных моделей (Ollama).
+* **Использование:** `localdoctor` -> Выводит подробный отчет о состоянии всех модулей.
+
 ---
 
 ## 🤖 Инструкция для ИИ-агентов (Gemini CLI, Codex, Claude Code)
@@ -95,3 +105,27 @@ cd mac-m1-zero-token
 * **Автор:** Mikhail (Santory12)
 * **Платформа:** macOS Sequoia / Sonoma (Apple Silicon M1 8GB+)
 * **Репозиторий:** [https://github.com/Santory12/mac-m1-zero-token](https://github.com/Santory12/mac-m1-zero-token)
+
+
+## Reliability checks (2026-11-06)
+
+Run `python3 checks/regression.py` with Python containing `openpyxl`.
+The installer selects and pins a Python interpreter with this dependency; it no longer
+starts Ollama or downloads models. Run the installer from any working directory.
+
+- `cleandoc` uses fresh OCR stdout, never a pre-existing sidecar file.
+  Full text means unabridged extraction, not guaranteed coverage of the original.
+  Compact output is auxiliary and can omit requirements; consult full text.
+- `ocr file.pdf --force-ocr` recognizes every page for mixed scanned/text PDFs.
+  Default mode prefers existing text. Empty OCR pages cause a failure requiring review.
+  File mode leaves the clipboard alone, reports failures, and overwrites its `.txt`/`.md`
+  output only after extraction. No raw media is sent to a model.
+- `localsearch` uses literal strings and reports execution errors separately.
+- `wbsvalid` rejects negative, nonfinite, nonnumeric hours and inverted ranges.
+  It does not verify business completeness or reconcile declared summary totals.
+- `wbs2xlsx en.csv ru.csv output.xlsx` supports decimal hours and stores text as
+  literal cells. Both input files need 11 columns. It does not translate content.
+- `checkodoo` is a syntax/heuristic check; install and runtime tests remain necessary.
+- `transcribe_local` uses isolated temporary files. The existing backend is Python
+  Whisper, not whisper.cpp; Metal acceleration is not verified. Whisper may download
+  a missing model; provision/cache models before offline use.

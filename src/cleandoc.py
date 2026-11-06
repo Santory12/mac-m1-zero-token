@@ -69,20 +69,13 @@ def convert_to_markdown(file_path: str) -> str:
         if res.returncode != 0:
             raise RuntimeError(f"Утилита ocr завершилась с ошибкой: {res.stderr.strip() or res.stdout.strip()}")
 
-        txt_path = os.path.splitext(file_path)[0] + ".txt"
-        if os.path.exists(txt_path):
-            with open(txt_path, "r", encoding="utf-8", errors="replace") as f:
-                content = f.read().strip()
-                if content:
-                    return content
-
         content = res.stdout.strip()
         if not content:
             raise RuntimeError(f"OCR не смог извлечь текст из файла '{file_path}'. Файл пуст или поврежден.")
         return content
 
     elif ext in [".txt", ".md", ".markdown"]:
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(file_path, "r", encoding="utf-8", errors="strict") as f:
             content = f.read().strip()
             if not content:
                 raise RuntimeError(f"Текстовый файл '{file_path}' пуст.")
@@ -114,7 +107,9 @@ def clean_text_compact(raw_text: str, source_filename: str) -> str:
 
         # 2. Если мы в режиме пропуска, проверяем, не начался ли новый значимый раздел
         if skip_mode:
-            if re.match(r"(?i)^#+\s+(?!предмет|порядок|ответственность|конфиденциальность).*$", stripped):
+            if re.match(r"^\d+(?:\.\d+)*[.)]?\s+\S", stripped):
+                skip_mode = False
+            elif re.match(r"(?i)^#+\s+(?!предмет|порядок|ответственность|конфиденциальность).*$", stripped):
                 skip_mode = False
             elif re.match(r"(?i)^(?:раздел\s*\d*[\.\:]?\s*)?(?:функционал|требован|архитектур|модул|интеграц|wbs|роли|сценари).*$", stripped):
                 skip_mode = False
@@ -148,7 +143,7 @@ def main():
         print("Использование утилиты cleandoc (mac-m1-zero-token):")
         print("  cleandoc <файл_тз.(docx|pdf|md|txt)>")
         print("\nСоздает ДВА файла:")
-        print("  1. <файл>_full.md    -> Полный извлеченный текст (100% требований, оплат, SLA)")
+        print("  1. <файл>_full.md    -> Полный извлеченный текст (без дополнительного сокращения; полнота зависит от извлечения)")
         print("  2. <файл>_compact.md -> Компактная версия без юридической воды для экономии контекста")
         print("\nНикогда не производит скрытый облачный fallback при ошибках.")
         sys.exit(0)
