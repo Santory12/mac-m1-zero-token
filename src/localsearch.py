@@ -18,11 +18,12 @@ DEFAULT_SEARCH_PATHS = [
 
 def print_help():
     print("Использование утилиты localsearch (mac-m1-zero-token):")
-    print("  localsearch \"поисковый запрос\" [дополнительная_директория]")
+    print("  localsearch \"поисковый запрос\" [папка_для_поиска]")
+    print("  localsearch --all \"поисковый запрос\"  (поиск по всей базе знаний)")
     print("\nПримеры:")
-    print("  localsearch \"KSeF\"                 -> Поиск по всем пресейлам и памяти")
-    print("  localsearch \"NovaZone 3PL\"        -> Поиск интеграций NovaZone")
-    print("  localsearch \"DATEV\" ~/Downloads   -> Поиск в конкретной папке")
+    print("  localsearch \"KSeF\"                 -> Поиск в текущем проекте и памяти")
+    print("  localsearch \"NovaZone\" ./LMA_Trading -> Поиск ТОЛЬКО в указанной папке")
+    print("  localsearch --all \"DATEV\"          -> Глобальный поиск по всем архивам")
     print("\nМгновенно находит релевантные куски с контекстом (0 токенов в облако).")
 
 def main():
@@ -30,32 +31,40 @@ def main():
         print_help()
         sys.exit(0)
 
-    query = sys.argv[1]
+    is_global = False
+    args = sys.argv[1:]
+
+    if args[0] in ["--all", "-a"]:
+        is_global = True
+        args = args[1:]
+
+    if not args:
+        print_help()
+        sys.exit(0)
+
+    query = args[0]
     search_dirs = []
 
-    if len(sys.argv) >= 3:
-        custom_dir = os.path.expanduser(sys.argv[2])
+    if len(args) >= 2:
+        # Указана конкретная папка -> ищем ТОЛЬКО в ней!
+        custom_dir = os.path.expanduser(args[1])
         if os.path.exists(custom_dir):
             search_dirs.append(custom_dir)
         else:
-            print(f"Предупреждение: Папка не найдена: {custom_dir}")
+            print(f"❌ Ошибка: Указанная папка не найдена: {custom_dir}")
+            sys.exit(1)
+    elif is_global:
+        # Глобальный поиск по всем архивам
+        search_dirs = [p for p in DEFAULT_SEARCH_PATHS if os.path.exists(p)]
+    else:
+        # По умолчанию: текущая папка + память проектов
+        search_dirs = [os.getcwd()]
+        mem_dir = os.path.expanduser("~/.gemini/tmp/mais/memory")
+        if os.path.exists(mem_dir) and mem_dir not in search_dirs:
+            search_dirs.append(mem_dir)
 
-    # Добавляем стандартные пути, если они существуют
-    for p in DEFAULT_SEARCH_PATHS:
-        if os.path.exists(p) and p not in search_dirs:
-            search_dirs.append(p)
+    print(f"🔍 Поиск «{query}» в: {', '.join(search_dirs)}...")
 
-    if not search_dirs:
-        print("Ошибка: Нет доступных директорий для поиска.")
-        sys.exit(1)
-
-    print(f"🔍 Поиск «{query}» по локальной базе знаний...")
-
-    # Формируем команду ripgrep
-    # -i: case-insensitive
-    # -C 2: 2 строки контекста вокруг совпадения
-    # -M 300: макс. длина строки (отсекает минифицированные файлы)
-    # -g: фильтр файлов (md, csv, py, xml, txt, docx)
     cmd = [
         "rg", "-i", "-C", "2", "-M", "300",
         "--heading", "--line-number",
@@ -76,15 +85,14 @@ def main():
             print(f" Совпадений по запросу «{query}» не найдено.")
             sys.exit(0)
 
-        # Подсчет совпадений
         matches_count = len(re.findall(rf"(?i){re.escape(query)}", output))
         print(f"✓ Найдено совпадений: {matches_count}\n")
         print("="*60)
         print(output)
         print("="*60)
-        print("\n💡 Совет: Используйте найденные цитаты напрямую без загрузки целых файлов в Gemini/Codex.")
+        print("\n💡 Совет: Передавайте в контекст Gemini/Codex только найденные 5–10 строк, а не весь файл.")
     except FileNotFoundError:
-        print("Ошибка: ripgrep (rg) не найден. Установите его: brew install ripgrep")
+        print("❌ Ошибка: ripgrep (rg) не найден. Установите: brew install ripgrep")
         sys.exit(1)
 
 if __name__ == "__main__":
