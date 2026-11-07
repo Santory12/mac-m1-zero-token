@@ -64,10 +64,12 @@ cp src/docmap.py "$TARGET_DIR/docmap"
 chmod +x "$TARGET_DIR/docmap"
 cp src/localdoctor.sh "$TARGET_DIR/localdoctor"
 chmod +x "$TARGET_DIR/localdoctor"
-echo "✓ Утилиты docmap и localdoctor установлены в $TARGET_DIR"
+cp src/cue2mp3.py "$TARGET_DIR/cue2mp3"
+chmod +x "$TARGET_DIR/cue2mp3"
+echo "✓ Утилиты docmap, localdoctor, cue2mp3 установлены в $TARGET_DIR"
 
 # Pin Python tools to the interpreter whose dependencies were checked.
-for tool in cleandoc localai localsearch wbsvalid wbs2xlsx checkodoo docmap; do
+for tool in cleandoc localai localsearch wbsvalid wbs2xlsx checkodoo docmap cue2mp3; do
     "$PYTHON_BIN" - "$TARGET_DIR/$tool" "$PYTHON_BIN" <<'PYTHON'
 import pathlib, sys
 p = pathlib.Path(sys.argv[1])
